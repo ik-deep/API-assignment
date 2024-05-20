@@ -2,6 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const jwt = require('jsonwebtoken');
 const app = express();
+const bcrypt = require("bcryptjs");
 
 //middleware 
 app.use(bodyParser.json());
@@ -34,7 +35,7 @@ let posts = [];
 
 
 // User Registration API---------------------------------------------
-app.post("/register", (req, res) => {
+app.post("/register",async (req, res) => {
     const { username, email, password } = req.body;
 
     // Check if username or email already exists
@@ -44,9 +45,13 @@ app.post("/register", (req, res) => {
     }
 
     // Create new user
-    const newUser = { username, email, password };
+
+    //encrypt the password
+    const salt = 10;
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const newUser = { username, email, password:hashedPassword };
     users.push(newUser);
-    res.status(201).json({ message: "User registered successfully" });
+    res.status(201).json({ message: "User registered successfully", user:users });
 })
 
 
@@ -54,12 +59,17 @@ app.post("/register", (req, res) => {
 
 
 // User Login API--------------------------------------------
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    const user = users.find(user => user.username === username && user.password === password);
+    const user = users.find(user => user.username === username);
 
     if (!user) {
-        return res.send({ message: "Invalid username or password", status: 401 });
+        return res.send({ message: "Invalid username", status: 401 });
+    }
+    // comparing the password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json("Incorrect Password!");
     }
 
     // Generate JWT token
@@ -71,7 +81,7 @@ app.post('/login', (req, res) => {
 
 
 // Forget Password API----------------------------------------
-app.post('/forgot-password', (req, res) => {
+app.post('/forgot-password',authenticateToken, (req, res) => {
     const { email } = req.body;
 
     // Check if user with given email exists
@@ -100,7 +110,7 @@ app.post('/posts',authenticateToken, (req, res) => {
 
 
 // Get all posts---------------------------------------------------
-app.get('/posts', (req, res) => {
+app.get('/posts',authenticateToken, (req, res) => {
     res.json(posts);
 });
 
